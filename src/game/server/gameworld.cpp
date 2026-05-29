@@ -385,7 +385,7 @@ void CGameWorld::ReleaseHooked(int ClientId)
 	CCharacter *pChr = (CCharacter *)FindFirst(CGameWorld::ENTTYPE_CHARACTER);
 	for(; pChr; pChr = (CCharacter *)pChr->TypeNext())
 	{
-		if(pChr->Core()->HookedPlayer() == ClientId && !pChr->IsSuper())
+		if((pChr->Core()->HookedPlayer(0) == ClientId || pChr->Core()->HookedPlayer(1) == ClientId) && !pChr->IsSuper())
 		{
 			pChr->ReleaseHook();
 		}

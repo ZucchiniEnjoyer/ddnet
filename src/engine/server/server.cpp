@@ -1836,6 +1836,7 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				PreInput.m_Jump = pInputData->m_Jump;
 				PreInput.m_Fire = pInputData->m_Fire;
 				PreInput.m_Hook = pInputData->m_Hook;
+				PreInput.m_Hook2 = pInputData->m_Hook2;
 				PreInput.m_WantedWeapon = pInputData->m_WantedWeapon;
 				PreInput.m_NextWeapon = pInputData->m_NextWeapon;
 				PreInput.m_PrevWeapon = pInputData->m_PrevWeapon;

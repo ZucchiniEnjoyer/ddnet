@@ -153,7 +153,14 @@ void CCharacterCore::Reset()
 	m_HookTeleBase = vec2(0, 0);
 	m_HookTick = 0;
 	m_HookState = HOOK_IDLE;
-	SetHookedPlayer(-1);
+	m_NewHook2 = false;
+	m_Hook2Pos = vec2(0, 0);
+	m_Hook2Dir = vec2(0, 0);
+	m_Hook2TeleBase = vec2(0, 0);
+	m_Hook2Tick = 0;
+	m_Hook2State = HOOK_IDLE;
+	SetHookedPlayer(0, -1);
+	SetHookedPlayer(1, -1);
 	m_AttachedPlayers.clear();
 	m_Jumped = 0;
 	m_JumpedTotal = 0;
@@ -257,25 +264,9 @@ void CCharacterCore::Tick(bool UseInput, bool DoDeferredTick)
 			m_Jumped &= ~1;
 		}
 
-		// handle hook
-		if(m_Input.m_Hook)
-		{
-			if(m_HookState == HOOK_IDLE)
-			{
-				m_HookState = HOOK_FLYING;
-				m_HookPos = m_Pos + TargetDirection * PhysicalSize() * 1.5f;
-				m_HookDir = TargetDirection;
-				SetHookedPlayer(-1);
-				m_HookTick = (float)SERVER_TICK_SPEED * (1.25f - m_Tuning.m_HookDuration);
-				m_TriggeredEvents |= COREEVENT_HOOK_LAUNCH;
-			}
-		}
-		else
-		{
-			SetHookedPlayer(-1);
-			m_HookState = HOOK_IDLE;
-			m_HookPos = m_Pos;
-		}
+		// handle hooks
+		for(int HookIndex = 0; HookIndex < NUM_HOOKS; HookIndex++)
+			ProcessHookInput(HookIndex, TargetDirection);
 	}
 
 	// handle jumping
@@ -295,162 +286,9 @@ void CCharacterCore::Tick(bool UseInput, bool DoDeferredTick)
 	if(m_Direction == 0)
 		m_Vel.x *= Friction;
 
-	// do hook
-	if(m_HookState == HOOK_IDLE)
-	{
-		SetHookedPlayer(-1);
-		m_HookPos = m_Pos;
-	}
-	else if(m_HookState >= HOOK_RETRACT_START && m_HookState < HOOK_RETRACT_END)
-	{
-		m_HookState++;
-	}
-	else if(m_HookState == HOOK_RETRACT_END)
-	{
-		m_TriggeredEvents |= COREEVENT_HOOK_RETRACT;
-		m_HookState = HOOK_RETRACTED;
-	}
-	else if(m_HookState == HOOK_FLYING)
-	{
-		vec2 HookBase = m_Pos;
-		if(m_NewHook)
-		{
-			HookBase = m_HookTeleBase;
-		}
-		vec2 NewPos = m_HookPos + m_HookDir * m_Tuning.m_HookFireSpeed;
-		if(distance(HookBase, NewPos) > m_Tuning.m_HookLength)
-		{
-			m_HookState = HOOK_RETRACT_START;
-			NewPos = HookBase + normalize(NewPos - HookBase) * m_Tuning.m_HookLength;
-			m_Reset = true;
-		}
-
-		// make sure that the hook doesn't go though the ground
-		bool GoingToHitGround = false;
-		bool GoingToRetract = false;
-		bool GoingThroughTele = false;
-		int TeleNr = 0;
-		int Hit = m_pCollision->IntersectLineTeleHook(m_HookPos, NewPos, &NewPos, nullptr, &TeleNr);
-
-		if(Hit)
-		{
-			if(Hit == TILE_NOHOOK)
-				GoingToRetract = true;
-			else if(Hit == TILE_TELEINHOOK)
-				GoingThroughTele = true;
-			else
-				GoingToHitGround = true;
-			m_Reset = true;
-		}
-
-		// Check against other players first
-		if(!m_HookHitDisabled && m_pWorld && m_Tuning.m_PlayerHooking && (m_HookState == HOOK_FLYING || !m_NewHook))
-		{
-			float Distance = 0.0f;
-			for(int i = 0; i < MAX_CLIENTS; i++)
-			{
-				CCharacterCore *pCharCore = m_pWorld->m_apCharacters[i];
-				if(!pCharCore || pCharCore == this || (!(m_Super || pCharCore->m_Super) && ((m_Id != -1 && !m_pTeams->CanCollide(i, m_Id)) || pCharCore->m_Solo || m_Solo)))
-					continue;
-
-				vec2 ClosestPoint;
-				if(closest_point_on_line(m_HookPos, NewPos, pCharCore->m_Pos, ClosestPoint))
-				{
-					if(distance(pCharCore->m_Pos, ClosestPoint) < PhysicalSize() + 2.0f)
-					{
-						if(m_HookedPlayer == -1 || distance(m_HookPos, pCharCore->m_Pos) < Distance)
-						{
-							m_TriggeredEvents |= COREEVENT_HOOK_ATTACH_PLAYER;
-							m_HookState = HOOK_GRABBED;
-							SetHookedPlayer(i);
-							Distance = distance(m_HookPos, pCharCore->m_Pos);
-						}
-					}
-				}
-			}
-		}
-
-		if(m_HookState == HOOK_FLYING)
-		{
-			// check against ground
-			if(GoingToHitGround)
-			{
-				m_TriggeredEvents |= COREEVENT_HOOK_ATTACH_GROUND;
-				m_HookState = HOOK_GRABBED;
-			}
-			else if(GoingToRetract)
-			{
-				m_TriggeredEvents |= COREEVENT_HOOK_HIT_NOHOOK;
-				m_HookState = HOOK_RETRACT_START;
-			}
-
-			if(GoingThroughTele && m_pWorld && !m_pCollision->TeleOuts(TeleNr - 1).empty())
-			{
-				m_TriggeredEvents = 0;
-				SetHookedPlayer(-1);
-
-				m_NewHook = true;
-				int RandomOut = m_pWorld->RandomOr0(m_pCollision->TeleOuts(TeleNr - 1).size());
-				m_HookPos = m_pCollision->TeleOuts(TeleNr - 1)[RandomOut] + TargetDirection * PhysicalSize() * 1.5f;
-				m_HookDir = TargetDirection;
-				m_HookTeleBase = m_HookPos;
-			}
-			else
-			{
-				m_HookPos = NewPos;
-			}
-		}
-	}
-
-	if(m_HookState == HOOK_GRABBED)
-	{
-		if(m_HookedPlayer != -1 && m_pWorld)
-		{
-			CCharacterCore *pCharCore = m_pWorld->m_apCharacters[m_HookedPlayer];
-			if(pCharCore && m_Id != -1 && m_pTeams->CanKeepHook(m_Id, pCharCore->m_Id))
-				m_HookPos = pCharCore->m_Pos;
-			else
-			{
-				// release hook
-				SetHookedPlayer(-1);
-				m_HookState = HOOK_RETRACTED;
-				m_HookPos = m_Pos;
-			}
-		}
-
-		// don't do this hook routine when we are already hooked to a player
-		if(m_HookedPlayer == -1 && distance(m_HookPos, m_Pos) > 46.0f)
-		{
-			vec2 HookVel = normalize(m_HookPos - m_Pos) * m_Tuning.m_HookDragAccel;
-			// the hook as more power to drag you up then down.
-			// this makes it easier to get on top of an platform
-			if(HookVel.y > 0)
-				HookVel.y *= 0.3f;
-
-			// the hook will boost it's power if the player wants to move
-			// in that direction. otherwise it will dampen everything abit
-			if((HookVel.x < 0 && m_Direction < 0) || (HookVel.x > 0 && m_Direction > 0))
-				HookVel.x *= 0.95f;
-			else
-				HookVel.x *= 0.75f;
-
-			vec2 NewVel = m_Vel + HookVel;
-
-			// check if we are under the legal limit for the hook
-			const float NewVelLength = length(NewVel);
-			if(NewVelLength < m_Tuning.m_HookDragSpeed || NewVelLength < length(m_Vel))
-				m_Vel = NewVel; // no problem. apply
-		}
-
-		// release hook (max default hook time is 1.25 s)
-		m_HookTick++;
-		if(m_HookedPlayer != -1 && (m_HookTick > SERVER_TICK_SPEED + SERVER_TICK_SPEED / 5 || (m_pWorld && !m_pWorld->m_apCharacters[m_HookedPlayer])))
-		{
-			SetHookedPlayer(-1);
-			m_HookState = HOOK_RETRACTED;
-			m_HookPos = m_Pos;
-		}
-	}
+	// do hooks
+	for(int HookIndex = 0; HookIndex < NUM_HOOKS; HookIndex++)
+		TickHook(HookIndex, TargetDirection);
 
 	if(DoDeferredTick)
 		TickDeferred();
@@ -495,22 +333,25 @@ void CCharacterCore::TickDeferred()
 				}
 
 				// handle hook influence
-				if(!m_HookHitDisabled && m_HookedPlayer == i && m_Tuning.m_PlayerHooking)
+				for(int HookIndex = 0; HookIndex < NUM_HOOKS; HookIndex++)
 				{
-					if(Distance > PhysicalSize() * 1.50f)
+					if(!m_HookHitDisabled && HookedPlayer(HookIndex) == i && m_Tuning.m_PlayerHooking)
 					{
-						float HookAccel = m_Tuning.m_HookDragAccel * (Distance / m_Tuning.m_HookLength);
-						float DragSpeed = m_Tuning.m_HookDragSpeed;
+						if(Distance > PhysicalSize() * 1.50f)
+						{
+							float HookAccel = m_Tuning.m_HookDragAccel * (Distance / m_Tuning.m_HookLength);
+							float DragSpeed = m_Tuning.m_HookDragSpeed;
 
-						vec2 Temp;
-						// add force to the hooked player
-						Temp.x = SaturatedAdd(-DragSpeed, DragSpeed, pCharCore->m_Vel.x, HookAccel * Dir.x * 1.5f);
-						Temp.y = SaturatedAdd(-DragSpeed, DragSpeed, pCharCore->m_Vel.y, HookAccel * Dir.y * 1.5f);
-						pCharCore->m_Vel = ClampVel(pCharCore->m_MoveRestrictions, Temp);
-						// add a little bit force to the guy who has the grip
-						Temp.x = SaturatedAdd(-DragSpeed, DragSpeed, m_Vel.x, -HookAccel * Dir.x * 0.25f);
-						Temp.y = SaturatedAdd(-DragSpeed, DragSpeed, m_Vel.y, -HookAccel * Dir.y * 0.25f);
-						m_Vel = ClampVel(m_MoveRestrictions, Temp);
+							vec2 Temp;
+							// add force to the hooked player
+							Temp.x = SaturatedAdd(-DragSpeed, DragSpeed, pCharCore->m_Vel.x, HookAccel * Dir.x * 1.5f);
+							Temp.y = SaturatedAdd(-DragSpeed, DragSpeed, pCharCore->m_Vel.y, HookAccel * Dir.y * 1.5f);
+							pCharCore->m_Vel = ClampVel(pCharCore->m_MoveRestrictions, Temp);
+							// add a little bit force to the guy who has the grip
+							Temp.x = SaturatedAdd(-DragSpeed, DragSpeed, m_Vel.x, -HookAccel * Dir.x * 0.25f);
+							Temp.y = SaturatedAdd(-DragSpeed, DragSpeed, m_Vel.y, -HookAccel * Dir.y * 0.25f);
+							m_Vel = ClampVel(m_MoveRestrictions, Temp);
+						}
 					}
 				}
 			}
@@ -519,6 +360,10 @@ void CCharacterCore::TickDeferred()
 		if(m_HookState != HOOK_FLYING)
 		{
 			m_NewHook = false;
+		}
+		if(m_Hook2State != HOOK_FLYING)
+		{
+			m_NewHook2 = false;
 		}
 	}
 
@@ -612,6 +457,13 @@ void CCharacterCore::Write(CNetObj_CharacterCore *pObjCore) const
 	pObjCore->m_HookDx = round_to_int(m_HookDir.x * 256.0f);
 	pObjCore->m_HookDy = round_to_int(m_HookDir.y * 256.0f);
 	pObjCore->m_HookedPlayer = m_HookedPlayer;
+	pObjCore->m_Hook2State = m_Hook2State;
+	pObjCore->m_Hook2Tick = m_Hook2Tick;
+	pObjCore->m_Hook2X = round_to_int(m_Hook2Pos.x);
+	pObjCore->m_Hook2Y = round_to_int(m_Hook2Pos.y);
+	pObjCore->m_Hook2Dx = round_to_int(m_Hook2Dir.x * 256.0f);
+	pObjCore->m_Hook2Dy = round_to_int(m_Hook2Dir.y * 256.0f);
+	pObjCore->m_HookedPlayer2 = m_HookedPlayer2;
 	pObjCore->m_Jumped = m_Jumped;
 	pObjCore->m_Direction = m_Direction;
 	pObjCore->m_Angle = m_Angle;
@@ -629,7 +481,14 @@ void CCharacterCore::Read(const CNetObj_CharacterCore *pObjCore)
 	m_HookPos.y = pObjCore->m_HookY;
 	m_HookDir.x = pObjCore->m_HookDx / 256.0f;
 	m_HookDir.y = pObjCore->m_HookDy / 256.0f;
-	SetHookedPlayer(pObjCore->m_HookedPlayer);
+	SetHookedPlayer(0, pObjCore->m_HookedPlayer);
+	m_Hook2State = pObjCore->m_Hook2State;
+	m_Hook2Tick = pObjCore->m_Hook2Tick;
+	m_Hook2Pos.x = pObjCore->m_Hook2X;
+	m_Hook2Pos.y = pObjCore->m_Hook2Y;
+	m_Hook2Dir.x = pObjCore->m_Hook2Dx / 256.0f;
+	m_Hook2Dir.y = pObjCore->m_Hook2Dy / 256.0f;
+	SetHookedPlayer(1, pObjCore->m_HookedPlayer2);
 	m_Jumped = pObjCore->m_Jumped;
 	m_Direction = pObjCore->m_Direction;
 	m_Angle = pObjCore->m_Angle;
@@ -698,13 +557,14 @@ void CCharacterCore::Quantize()
 	Read(&Core);
 }
 
-void CCharacterCore::SetHookedPlayer(int HookedPlayer)
+void CCharacterCore::SetHookedPlayer(int HookIndex, int HookedPlayer)
 {
-	if(HookedPlayer != m_HookedPlayer)
+	int &CurrentHookedPlayer = HookIndex == 0 ? m_HookedPlayer : m_HookedPlayer2;
+	if(HookedPlayer != CurrentHookedPlayer)
 	{
-		if(m_HookedPlayer != -1 && m_Id != -1 && m_pWorld)
+		if(CurrentHookedPlayer != -1 && m_Id != -1 && m_pWorld && !IsHookingPlayer(CurrentHookedPlayer, HookIndex))
 		{
-			CCharacterCore *pCharCore = m_pWorld->m_apCharacters[m_HookedPlayer];
+			CCharacterCore *pCharCore = m_pWorld->m_apCharacters[CurrentHookedPlayer];
 			if(pCharCore)
 			{
 				pCharCore->m_AttachedPlayers.erase(m_Id);
@@ -718,7 +578,228 @@ void CCharacterCore::SetHookedPlayer(int HookedPlayer)
 				pCharCore->m_AttachedPlayers.insert(m_Id);
 			}
 		}
-		m_HookedPlayer = HookedPlayer;
+		CurrentHookedPlayer = HookedPlayer;
+	}
+}
+
+int CCharacterCore::HookedPlayer(int HookIndex) const
+{
+	return HookIndex == 0 ? m_HookedPlayer : m_HookedPlayer2;
+}
+
+bool CCharacterCore::IsHookingPlayer(int PlayerId, int ExcludeHookIndex) const
+{
+	for(int HookIndex = 0; HookIndex < NUM_HOOKS; HookIndex++)
+	{
+		if(HookIndex == ExcludeHookIndex)
+			continue;
+		if(HookedPlayer(HookIndex) == PlayerId && IsHookActive(HookIndex == 0 ? m_HookState : m_Hook2State))
+			return true;
+	}
+	return false;
+}
+
+bool CCharacterCore::IsHookActive(int HookState)
+{
+	return HookState != HOOK_IDLE && HookState != HOOK_RETRACTED;
+}
+
+namespace {
+struct SHookData
+{
+	vec2 &m_Pos;
+	vec2 &m_Dir;
+	vec2 &m_TeleBase;
+	int &m_Tick;
+	int &m_State;
+	bool &m_NewHook;
+};
+
+SHookData HookData(CCharacterCore *pCore, int HookIndex)
+{
+	if(HookIndex == 0)
+		return {pCore->m_HookPos, pCore->m_HookDir, pCore->m_HookTeleBase, pCore->m_HookTick, pCore->m_HookState, pCore->m_NewHook};
+	return {pCore->m_Hook2Pos, pCore->m_Hook2Dir, pCore->m_Hook2TeleBase, pCore->m_Hook2Tick, pCore->m_Hook2State, pCore->m_NewHook2};
+}
+
+int HookInput(const CCharacterCore *pCore, int HookIndex)
+{
+	return HookIndex == 0 ? pCore->m_Input.m_Hook : pCore->m_Input.m_Hook2;
+}
+} // namespace
+
+void CCharacterCore::ProcessHookInput(int HookIndex, vec2 TargetDirection)
+{
+	SHookData Hook = HookData(this, HookIndex);
+	if(HookInput(this, HookIndex))
+	{
+		if(Hook.m_State == HOOK_IDLE)
+		{
+			Hook.m_State = HOOK_FLYING;
+			Hook.m_Pos = m_Pos + TargetDirection * PhysicalSize() * 1.5f;
+			Hook.m_Dir = TargetDirection;
+			SetHookedPlayer(HookIndex, -1);
+			Hook.m_Tick = (float)SERVER_TICK_SPEED * (1.25f - m_Tuning.m_HookDuration);
+			m_TriggeredEvents |= COREEVENT_HOOK_LAUNCH;
+		}
+	}
+	else
+	{
+		SetHookedPlayer(HookIndex, -1);
+		Hook.m_State = HOOK_IDLE;
+		Hook.m_Pos = m_Pos;
+	}
+}
+
+void CCharacterCore::TickHook(int HookIndex, vec2 TargetDirection)
+{
+	SHookData Hook = HookData(this, HookIndex);
+	const int HookedId = HookedPlayer(HookIndex);
+
+	if(Hook.m_State == HOOK_IDLE)
+	{
+		SetHookedPlayer(HookIndex, -1);
+		Hook.m_Pos = m_Pos;
+	}
+	else if(Hook.m_State >= HOOK_RETRACT_START && Hook.m_State < HOOK_RETRACT_END)
+	{
+		Hook.m_State++;
+	}
+	else if(Hook.m_State == HOOK_RETRACT_END)
+	{
+		m_TriggeredEvents |= COREEVENT_HOOK_RETRACT;
+		Hook.m_State = HOOK_RETRACTED;
+	}
+	else if(Hook.m_State == HOOK_FLYING)
+	{
+		vec2 HookBase = m_Pos;
+		if(Hook.m_NewHook)
+		{
+			HookBase = Hook.m_TeleBase;
+		}
+		vec2 NewPos = Hook.m_Pos + Hook.m_Dir * m_Tuning.m_HookFireSpeed;
+		if(distance(HookBase, NewPos) > m_Tuning.m_HookLength)
+		{
+			Hook.m_State = HOOK_RETRACT_START;
+			NewPos = HookBase + normalize(NewPos - HookBase) * m_Tuning.m_HookLength;
+			m_Reset = true;
+		}
+
+		bool GoingToHitGround = false;
+		bool GoingToRetract = false;
+		bool GoingThroughTele = false;
+		int TeleNr = 0;
+		int Hit = m_pCollision->IntersectLineTeleHook(Hook.m_Pos, NewPos, &NewPos, nullptr, &TeleNr);
+
+		if(Hit)
+		{
+			if(Hit == TILE_NOHOOK)
+				GoingToRetract = true;
+			else if(Hit == TILE_TELEINHOOK)
+				GoingThroughTele = true;
+			else
+				GoingToHitGround = true;
+			m_Reset = true;
+		}
+
+		if(!m_HookHitDisabled && m_pWorld && m_Tuning.m_PlayerHooking && (Hook.m_State == HOOK_FLYING || !Hook.m_NewHook))
+		{
+			float BestDistance = 0.0f;
+			for(int i = 0; i < MAX_CLIENTS; i++)
+			{
+				CCharacterCore *pCharCore = m_pWorld->m_apCharacters[i];
+				if(!pCharCore || pCharCore == this || (!(m_Super || pCharCore->m_Super) && ((m_Id != -1 && !m_pTeams->CanCollide(i, m_Id)) || pCharCore->m_Solo || m_Solo)))
+					continue;
+
+				vec2 ClosestPoint;
+				if(closest_point_on_line(Hook.m_Pos, NewPos, pCharCore->m_Pos, ClosestPoint))
+				{
+					if(distance(pCharCore->m_Pos, ClosestPoint) < PhysicalSize() + 2.0f)
+					{
+						if(HookedId == -1 || distance(Hook.m_Pos, pCharCore->m_Pos) < BestDistance)
+						{
+							m_TriggeredEvents |= COREEVENT_HOOK_ATTACH_PLAYER;
+							Hook.m_State = HOOK_GRABBED;
+							SetHookedPlayer(HookIndex, i);
+							BestDistance = distance(Hook.m_Pos, pCharCore->m_Pos);
+						}
+					}
+				}
+			}
+		}
+
+		if(Hook.m_State == HOOK_FLYING)
+		{
+			if(GoingToHitGround)
+			{
+				m_TriggeredEvents |= COREEVENT_HOOK_ATTACH_GROUND;
+				Hook.m_State = HOOK_GRABBED;
+			}
+			else if(GoingToRetract)
+			{
+				m_TriggeredEvents |= COREEVENT_HOOK_HIT_NOHOOK;
+				Hook.m_State = HOOK_RETRACT_START;
+			}
+
+			if(GoingThroughTele && m_pWorld && !m_pCollision->TeleOuts(TeleNr - 1).empty())
+			{
+				m_TriggeredEvents = 0;
+				SetHookedPlayer(HookIndex, -1);
+
+				Hook.m_NewHook = true;
+				int RandomOut = m_pWorld->RandomOr0(m_pCollision->TeleOuts(TeleNr - 1).size());
+				Hook.m_Pos = m_pCollision->TeleOuts(TeleNr - 1)[RandomOut] + TargetDirection * PhysicalSize() * 1.5f;
+				Hook.m_Dir = TargetDirection;
+				Hook.m_TeleBase = Hook.m_Pos;
+			}
+			else
+			{
+				Hook.m_Pos = NewPos;
+			}
+		}
+	}
+
+	if(Hook.m_State == HOOK_GRABBED)
+	{
+		const int CurrentHookedId = HookedPlayer(HookIndex);
+		if(CurrentHookedId != -1 && m_pWorld)
+		{
+			CCharacterCore *pCharCore = m_pWorld->m_apCharacters[CurrentHookedId];
+			if(pCharCore && m_Id != -1 && m_pTeams->CanKeepHook(m_Id, pCharCore->m_Id))
+				Hook.m_Pos = pCharCore->m_Pos;
+			else
+			{
+				SetHookedPlayer(HookIndex, -1);
+				Hook.m_State = HOOK_RETRACTED;
+				Hook.m_Pos = m_Pos;
+			}
+		}
+
+		if(CurrentHookedId == -1 && distance(Hook.m_Pos, m_Pos) > 46.0f)
+		{
+			vec2 HookVel = normalize(Hook.m_Pos - m_Pos) * m_Tuning.m_HookDragAccel;
+			if(HookVel.y > 0)
+				HookVel.y *= 0.3f;
+
+			if((HookVel.x < 0 && m_Direction < 0) || (HookVel.x > 0 && m_Direction > 0))
+				HookVel.x *= 0.95f;
+			else
+				HookVel.x *= 0.75f;
+
+			vec2 NewVel = m_Vel + HookVel;
+
+			const float NewVelLength = length(NewVel);
+			if(NewVelLength < m_Tuning.m_HookDragSpeed || NewVelLength < length(m_Vel))
+				m_Vel = NewVel;
+		}
+
+		Hook.m_Tick++;
+		if(CurrentHookedId != -1 && (Hook.m_Tick > SERVER_TICK_SPEED + SERVER_TICK_SPEED / 5 || (m_pWorld && !m_pWorld->m_apCharacters[CurrentHookedId])))
+		{
+			SetHookedPlayer(HookIndex, -1);
+			Hook.m_State = HOOK_RETRACTED;
+			Hook.m_Pos = m_Pos;
+		}
 	}
 }
 

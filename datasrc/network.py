@@ -118,6 +118,7 @@ Objects = [
 		NetIntAny("m_Jump"),
 		NetIntAny("m_Fire"),
 		NetIntAny("m_Hook"),
+		NetIntAny("m_Hook2"),
 
 		NetIntRange("m_PlayerFlags", 0, 256),
 
@@ -200,6 +201,15 @@ Objects = [
 		NetIntAny("m_HookY"),
 		NetIntAny("m_HookDx"),
 		NetIntAny("m_HookDy"),
+
+		NetIntRange("m_HookedPlayer2", -1, 'MAX_CLIENTS-1'),
+		NetIntRange("m_Hook2State", -1, 5),
+		NetIntAny("m_Hook2Tick"),
+
+		NetIntAny("m_Hook2X"),
+		NetIntAny("m_Hook2Y"),
+		NetIntAny("m_Hook2Dx"),
+		NetIntAny("m_Hook2Dy"),
 	]),
 
 	NetObject("Character:CharacterCore", [
@@ -630,7 +640,8 @@ Messages = [
 		NetIntAny("m_Jump"),
 		NetIntAny("m_Fire"),
 		NetIntAny("m_Hook"),
-		
+		NetIntAny("m_Hook2"),
+
 		NetIntAny("m_WantedWeapon"),
 		NetIntAny("m_NextWeapon"),
 		NetIntAny("m_PrevWeapon"),

@@ -132,6 +132,10 @@ void CControls::OnConsoleInit()
 		Console()->Register("+hook", "", CFGFLAG_CLIENT, ConKeyInputState, &s_State, "Hook");
 	}
 	{
+		static CInputState s_State = {this, {&m_aInputData[0].m_Hook2, &m_aInputData[1].m_Hook2}};
+		Console()->Register("+hook2", "", CFGFLAG_CLIENT, ConKeyInputState, &s_State, "Hook 2");
+	}
+	{
 		static CInputState s_State = {this, {&m_aInputData[0].m_Fire, &m_aInputData[1].m_Fire}};
 		Console()->Register("+fire", "", CFGFLAG_CLIENT, ConKeyInputCounter, &s_State, "Fire");
 	}
@@ -270,6 +274,7 @@ int CControls::SnapInput(int *pData)
 			{
 				pDummyInput->m_Direction = m_aInputData[g_Config.m_ClDummy].m_Direction;
 				pDummyInput->m_Hook = m_aInputData[g_Config.m_ClDummy].m_Hook;
+				pDummyInput->m_Hook2 = m_aInputData[g_Config.m_ClDummy].m_Hook2;
 				pDummyInput->m_Jump = m_aInputData[g_Config.m_ClDummy].m_Jump;
 				pDummyInput->m_PlayerFlags = m_aInputData[g_Config.m_ClDummy].m_PlayerFlags;
 				pDummyInput->m_TargetX = m_aInputData[g_Config.m_ClDummy].m_TargetX;
@@ -320,11 +325,12 @@ int CControls::SnapInput(int *pData)
 		Send = Send || m_aInputData[g_Config.m_ClDummy].m_Jump != m_aLastData[g_Config.m_ClDummy].m_Jump;
 		Send = Send || m_aInputData[g_Config.m_ClDummy].m_Fire != m_aLastData[g_Config.m_ClDummy].m_Fire;
 		Send = Send || m_aInputData[g_Config.m_ClDummy].m_Hook != m_aLastData[g_Config.m_ClDummy].m_Hook;
+		Send = Send || m_aInputData[g_Config.m_ClDummy].m_Hook2 != m_aLastData[g_Config.m_ClDummy].m_Hook2;
 		Send = Send || m_aInputData[g_Config.m_ClDummy].m_WantedWeapon != m_aLastData[g_Config.m_ClDummy].m_WantedWeapon;
 		Send = Send || m_aInputData[g_Config.m_ClDummy].m_NextWeapon != m_aLastData[g_Config.m_ClDummy].m_NextWeapon;
 		Send = Send || m_aInputData[g_Config.m_ClDummy].m_PrevWeapon != m_aLastData[g_Config.m_ClDummy].m_PrevWeapon;
 		Send = Send || time_get() > m_LastSendTime + time_freq() / 25; // send at least 25 Hz
-		Send = Send || (GameClient()->m_Snap.m_pLocalCharacter && GameClient()->m_Snap.m_pLocalCharacter->m_Weapon == WEAPON_NINJA && (m_aInputData[g_Config.m_ClDummy].m_Direction || m_aInputData[g_Config.m_ClDummy].m_Jump || m_aInputData[g_Config.m_ClDummy].m_Hook));
+		Send = Send || (GameClient()->m_Snap.m_pLocalCharacter && GameClient()->m_Snap.m_pLocalCharacter->m_Weapon == WEAPON_NINJA && (m_aInputData[g_Config.m_ClDummy].m_Direction || m_aInputData[g_Config.m_ClDummy].m_Jump || m_aInputData[g_Config.m_ClDummy].m_Hook || m_aInputData[g_Config.m_ClDummy].m_Hook2));
 	}
 
 	// copy and return size

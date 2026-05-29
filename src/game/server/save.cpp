@@ -232,12 +232,12 @@ bool CSaveTee::Load(CCharacter *pChr, std::optional<int> Team)
 	pChr->m_Core.m_HookState = m_HookState;
 	if(m_HookedPlayer != -1 && Team.has_value() && pChr->Teams()->m_Core.Team(m_HookedPlayer) != Team.value())
 	{
-		pChr->m_Core.SetHookedPlayer(-1);
+		pChr->m_Core.SetHookedPlayer(0, -1);
 		pChr->m_Core.m_HookState = HOOK_FLYING;
 	}
 	else
 	{
-		pChr->m_Core.SetHookedPlayer(m_HookedPlayer);
+		pChr->m_Core.SetHookedPlayer(0, m_HookedPlayer);
 	}
 	pChr->m_Core.m_NewHook = m_NewHook;
 	pChr->m_SavedInput.m_Direction = m_InputDirection;

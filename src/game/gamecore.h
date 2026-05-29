@@ -183,6 +183,8 @@ class CCharacterCore
 	CCollision *m_pCollision;
 
 public:
+	static constexpr int NUM_HOOKS = 2;
+
 	static constexpr float PhysicalSize() { return 28.0f; }
 	static constexpr vec2 PhysicalSizeVec2() { return vec2(28.0f, 28.0f); }
 	vec2 m_Pos;
@@ -194,8 +196,15 @@ public:
 	int m_HookTick;
 	int m_HookState;
 	std::set<int> m_AttachedPlayers;
-	int HookedPlayer() const { return m_HookedPlayer; }
-	void SetHookedPlayer(int HookedPlayer);
+	int HookedPlayer(int HookIndex = 0) const;
+	void SetHookedPlayer(int HookIndex, int HookedPlayer);
+
+	vec2 m_Hook2Pos;
+	vec2 m_Hook2Dir;
+	vec2 m_Hook2TeleBase;
+	int m_Hook2Tick;
+	int m_Hook2State;
+	bool m_NewHook2;
 
 	int m_ActiveWeapon;
 	class CWeaponStat
@@ -277,6 +286,12 @@ private:
 	CTeamsCore *m_pTeams;
 	int m_MoveRestrictions;
 	int m_HookedPlayer;
+	int m_HookedPlayer2;
+
+	void ProcessHookInput(int HookIndex, vec2 TargetDirection);
+	void TickHook(int HookIndex, vec2 TargetDirection);
+	bool IsHookingPlayer(int PlayerId, int ExcludeHookIndex = -1) const;
+	static bool IsHookActive(int HookState);
 	static bool IsSwitchActiveCb(unsigned char Number, void *pUser);
 };
 

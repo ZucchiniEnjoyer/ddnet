@@ -136,7 +136,7 @@ bool CBinds::OnInput(const IInput::CEvent &Event)
 				const char *pBind = m_aapKeyBindings[Mask][Event.m_Key];
 				if(g_Config.m_ClSubTickAiming)
 				{
-					if(str_comp("+fire", pBind) == 0 || str_comp("+hook", pBind) == 0)
+					if(str_comp("+fire", pBind) == 0 || str_comp("+hook", pBind) == 0 || str_comp("+hook2", pBind) == 0)
 					{
 						m_MouseOnAction = true;
 					}
@@ -280,7 +280,8 @@ void CBinds::SetDefaults()
 	Bind(KEY_SPACE, "+jump");
 	Bind(KEY_MOUSE_1, "+fire");
 	Bind(KEY_MOUSE_2, "+hook");
-	Bind(KEY_LSHIFT, "+emote");
+	Bind(KEY_LSHIFT, "+hook2");
+	Bind(KEY_E, "+emote");
 	Bind(KEY_RETURN, "+show_chat; chat all");
 	Bind(KEY_RIGHT, "spectate_next");
 	Bind(KEY_LEFT, "spectate_previous");
@@ -541,4 +542,8 @@ void CBinds::SetDDRaceBinds(bool FreeOnly)
 	}
 
 	g_Config.m_ClDDRaceBindsSet = 2;
+
+	// Second hook (dual hook mod): always use left shift; move emote to E if free
+	Bind(KEY_LSHIFT, "+hook2", false);
+	Bind(KEY_E, "+emote", FreeOnly);
 }

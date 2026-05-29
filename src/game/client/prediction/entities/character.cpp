@@ -555,6 +555,7 @@ void CCharacter::OnDirectInput(const CNetObj_PlayerInput *pNewInput)
 		ResetInput();
 		// mods that do not allow inputs to be held while chatting also do not allow to hold hook
 		m_Input.m_Hook = 0;
+		m_Input.m_Hook2 = 0;
 		return;
 	}
 
@@ -577,8 +578,14 @@ void CCharacter::OnDirectInput(const CNetObj_PlayerInput *pNewInput)
 
 void CCharacter::ReleaseHook()
 {
-	m_Core.SetHookedPlayer(-1);
-	m_Core.m_HookState = HOOK_RETRACTED;
+	for(int HookIndex = 0; HookIndex < CCharacterCore::NUM_HOOKS; HookIndex++)
+	{
+		m_Core.SetHookedPlayer(HookIndex, -1);
+		if(HookIndex == 0)
+			m_Core.m_HookState = HOOK_RETRACTED;
+		else
+			m_Core.m_Hook2State = HOOK_RETRACTED;
+	}
 	m_Core.m_TriggeredEvents |= COREEVENT_HOOK_RETRACT;
 }
 
@@ -586,6 +593,7 @@ void CCharacter::ResetHook()
 {
 	ReleaseHook();
 	m_Core.m_HookPos = m_Core.m_Pos;
+	m_Core.m_Hook2Pos = m_Core.m_Pos;
 }
 
 void CCharacter::ResetInput()
@@ -1073,6 +1081,7 @@ void CCharacter::DDRaceTick()
 			m_Input.m_Direction = 0;
 			m_Input.m_Jump = 0;
 			m_Input.m_Hook = 0;
+			m_Input.m_Hook2 = 0;
 		}
 		if(m_FreezeTime == 1)
 			Unfreeze();
@@ -1111,7 +1120,10 @@ void CCharacter::DDRacePostCoreTick()
 		return;
 
 	if(m_Core.m_EndlessHook)
+	{
 		m_Core.m_HookTick = 0;
+		m_Core.m_Hook2Tick = 0;
+	}
 
 	m_FrozenLastTick = false;
 
@@ -1321,10 +1333,16 @@ void CCharacter::ResetPrediction()
 		SetWeaponGot(w, false);
 		SetWeaponAmmo(w, -1);
 	}
-	if(m_Core.HookedPlayer() >= 0)
+	for(int HookIndex = 0; HookIndex < CCharacterCore::NUM_HOOKS; HookIndex++)
 	{
-		m_Core.SetHookedPlayer(-1);
-		m_Core.m_HookState = HOOK_IDLE;
+		if(m_Core.HookedPlayer(HookIndex) >= 0)
+		{
+			m_Core.SetHookedPlayer(HookIndex, -1);
+			if(HookIndex == 0)
+				m_Core.m_HookState = HOOK_IDLE;
+			else
+				m_Core.m_Hook2State = HOOK_IDLE;
+		}
 	}
 	m_LastWeaponSwitchTick = 0;
 	m_LastTuneZoneTick = 0;
@@ -1434,7 +1452,7 @@ void CCharacter::Read(CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtende
 		m_Core.m_CollisionDisabled = !GetTuning(GetOverriddenTuneZone())->m_PlayerCollision;
 		m_Core.m_HookHitDisabled = !GetTuning(GetOverriddenTuneZone())->m_PlayerHooking;
 
-		if(m_Core.m_HookTick != 0)
+		if(m_Core.m_HookTick != 0 || m_Core.m_Hook2Tick != 0)
 			m_Core.m_EndlessHook = false;
 
 		// detect unfreeze (in case the player was frozen in the tile prediction and not correctly unfrozen)
@@ -1482,6 +1500,7 @@ void CCharacter::Read(CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtende
 		mem_zero(&m_SavedInput, sizeof(m_SavedInput));
 		m_Input.m_Direction = m_SavedInput.m_Direction = m_Core.m_Direction;
 		m_Input.m_Hook = m_SavedInput.m_Hook = (m_Core.m_HookState != HOOK_IDLE);
+		m_Input.m_Hook2 = m_SavedInput.m_Hook2 = (m_Core.m_Hook2State != HOOK_IDLE);
 
 		if(pExtended && pExtended->m_TargetX != 0 && pExtended->m_TargetY != 0)
 		{

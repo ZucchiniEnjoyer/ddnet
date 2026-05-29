@@ -752,8 +752,14 @@ void CCharacter::OnDirectInput(const CNetObj_PlayerInput *pNewInput)
 
 void CCharacter::ReleaseHook()
 {
-	m_Core.SetHookedPlayer(-1);
-	m_Core.m_HookState = HOOK_RETRACTED;
+	for(int HookIndex = 0; HookIndex < CCharacterCore::NUM_HOOKS; HookIndex++)
+	{
+		m_Core.SetHookedPlayer(HookIndex, -1);
+		if(HookIndex == 0)
+			m_Core.m_HookState = HOOK_RETRACTED;
+		else
+			m_Core.m_Hook2State = HOOK_RETRACTED;
+	}
 	m_Core.m_TriggeredEvents |= COREEVENT_HOOK_RETRACT;
 }
 
@@ -761,6 +767,7 @@ void CCharacter::ResetHook()
 {
 	ReleaseHook();
 	m_Core.m_HookPos = m_Core.m_Pos;
+	m_Core.m_Hook2Pos = m_Core.m_Pos;
 }
 
 void CCharacter::ResetInput()
@@ -820,6 +827,10 @@ void CCharacter::Tick()
 	{
 		Antibot()->OnHookAttach(m_pPlayer->GetCid(), false);
 	}
+	if(!m_PrevInput.m_Hook2 && m_Input.m_Hook2 && !(m_Core.m_TriggeredEvents & COREEVENT_HOOK_ATTACH_PLAYER))
+	{
+		Antibot()->OnHookAttach(m_pPlayer->GetCid(), false);
+	}
 
 	// handle Weapons
 	HandleWeapons();
@@ -828,10 +839,14 @@ void CCharacter::Tick()
 
 	if(m_Core.m_TriggeredEvents & COREEVENT_HOOK_ATTACH_PLAYER)
 	{
-		const int HookedPlayer = m_Core.HookedPlayer();
-		if(HookedPlayer != -1 && GameServer()->m_apPlayers[HookedPlayer]->GetTeam() != TEAM_SPECTATORS)
+		for(int HookIndex = 0; HookIndex < CCharacterCore::NUM_HOOKS; HookIndex++)
 		{
-			Antibot()->OnHookAttach(m_pPlayer->GetCid(), true);
+			const int HookedPlayer = m_Core.HookedPlayer(HookIndex);
+			if(HookedPlayer != -1 && GameServer()->m_apPlayers[HookedPlayer]->GetTeam() != TEAM_SPECTATORS)
+			{
+				Antibot()->OnHookAttach(m_pPlayer->GetCid(), true);
+				break;
+			}
 		}
 	}
 
@@ -1148,6 +1163,12 @@ void CCharacter::SnapCharacter(int SnappingClient, int Id)
 				Character.m_HookedPlayer = -1;
 		}
 
+		if(Character.m_HookedPlayer2 != -1)
+		{
+			if(!Server()->Translate(Character.m_HookedPlayer2, SnappingClient))
+				Character.m_HookedPlayer2 = -1;
+		}
+
 		Character.m_AttackTick = m_AttackTick;
 		Character.m_Direction = m_Input.m_Direction;
 		Character.m_Weapon = Weapon;
@@ -1218,14 +1239,14 @@ bool CCharacter::IsSnappingCharacterInView(int SnappingClientId)
 	int Id = m_pPlayer->GetCid();
 
 	// A player may not be clipped away if their hook or a hook attached to them is in the field of view
-	bool PlayerAndHookNotInView = NetworkClippedLine(SnappingClientId, m_Pos, m_Core.m_HookPos);
+	bool PlayerAndHookNotInView = NetworkClippedLine(SnappingClientId, m_Pos, m_Core.m_HookPos) && NetworkClippedLine(SnappingClientId, m_Pos, m_Core.m_Hook2Pos);
 	bool AttachedHookInView = false;
 	if(PlayerAndHookNotInView)
 	{
 		for(const auto &AttachedPlayerId : m_Core.m_AttachedPlayers)
 		{
 			const CCharacter *pOtherPlayer = GameServer()->GetPlayerChar(AttachedPlayerId);
-			if(pOtherPlayer && pOtherPlayer->m_Core.HookedPlayer() == Id)
+			if(pOtherPlayer && (pOtherPlayer->m_Core.HookedPlayer(0) == Id || pOtherPlayer->m_Core.HookedPlayer(1) == Id))
 			{
 				if(!NetworkClippedLine(SnappingClientId, m_Pos, pOtherPlayer->m_Pos))
 				{
@@ -2212,6 +2233,7 @@ void CCharacter::DDRaceTick()
 		m_Input.m_Direction = 0;
 		m_Input.m_Jump = 0;
 		m_Input.m_Hook = 0;
+		m_Input.m_Hook2 = 0;
 		if(m_FreezeTime == 1)
 			Unfreeze();
 	}
@@ -2254,7 +2276,10 @@ void CCharacter::DDRacePostCoreTick()
 	m_Time = (float)(Server()->Tick() - m_StartTime) / ((float)Server()->TickSpeed());
 
 	if(m_Core.m_EndlessHook || (m_Core.m_Super && g_Config.m_SvEndlessSuperHook))
+	{
 		m_Core.m_HookTick = 0;
+		m_Core.m_Hook2Tick = 0;
+	}
 
 	m_FrozenLastTick = false;
 
@@ -2429,7 +2454,7 @@ void CCharacter::Pause(bool Pause)
 		GameServer()->m_World.m_Core.m_apCharacters[m_pPlayer->GetCid()] = nullptr;
 		GameServer()->m_World.RemoveEntity(this);
 
-		if(m_Core.HookedPlayer() != -1) // Keeping hook would allow cheats
+		if(m_Core.HookedPlayer(0) != -1 || m_Core.HookedPlayer(1) != -1) // Keeping hook would allow cheats
 		{
 			ResetHook();
 			GameWorld()->ReleaseHooked(GetPlayer()->GetCid());
@@ -2519,6 +2544,7 @@ void CCharacter::Rescue()
 		// Don't load these from saved tee:
 		m_Core.m_Vel = vec2(0, 0);
 		m_Core.m_HookState = HOOK_IDLE;
+		m_Core.m_Hook2State = HOOK_IDLE;
 		m_StartTime = StartTime;
 		m_SavedInput.m_Direction = 0;
 		m_SavedInput.m_Jump = 0;
@@ -2575,6 +2601,9 @@ void CCharacter::ApplyMoveRestrictions()
 
 void CCharacter::SwapClients(int Client1, int Client2)
 {
-	const int HookedPlayer = m_Core.HookedPlayer();
-	m_Core.SetHookedPlayer(HookedPlayer == Client1 ? Client2 : (HookedPlayer == Client2 ? Client1 : HookedPlayer));
+	for(int HookIndex = 0; HookIndex < CCharacterCore::NUM_HOOKS; HookIndex++)
+	{
+		const int HookedPlayer = m_Core.HookedPlayer(HookIndex);
+		m_Core.SetHookedPlayer(HookIndex, HookedPlayer == Client1 ? Client2 : (HookedPlayer == Client2 ? Client1 : HookedPlayer));
+	}
 }

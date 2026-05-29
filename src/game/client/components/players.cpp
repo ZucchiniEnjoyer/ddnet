@@ -458,9 +458,11 @@ void CPlayers::RenderHook(
 	const CNetObj_Character *pPlayerChar,
 	const CTeeRenderInfo *pRenderInfo,
 	int ClientId,
-	float Intra)
+	float Intra,
+	int HookIndex)
 {
-	if(pPlayerChar->m_HookState <= 0)
+	const int HookState = HookIndex == 0 ? pPlayerChar->m_HookState : pPlayerChar->m_Hook2State;
+	if(HookState <= 0)
 		return;
 
 	CNetObj_Character Prev;
@@ -468,10 +470,12 @@ void CPlayers::RenderHook(
 	Prev = *pPrevChar;
 	Player = *pPlayerChar;
 
+	const int HookedPlayer = HookIndex == 0 ? pPlayerChar->m_HookedPlayer : pPlayerChar->m_HookedPlayer2;
+
 	CTeeRenderInfo RenderInfo = *pRenderInfo;
 
 	// don't render hooks to not active character cores
-	if(pPlayerChar->m_HookedPlayer != -1 && !GameClient()->m_Snap.m_aCharacters[pPlayerChar->m_HookedPlayer].m_Active)
+	if(HookedPlayer != -1 && !GameClient()->m_Snap.m_aCharacters[HookedPlayer].m_Active)
 		return;
 
 	if(ClientId >= 0)
@@ -498,10 +502,12 @@ void CPlayers::RenderHook(
 	vec2 Pos = Position;
 	vec2 HookPos;
 
-	if(in_range(pPlayerChar->m_HookedPlayer, MAX_CLIENTS - 1))
-		HookPos = GameClient()->m_aClients[pPlayerChar->m_HookedPlayer].m_RenderPos;
-	else
+	if(in_range(HookedPlayer, MAX_CLIENTS - 1))
+		HookPos = GameClient()->m_aClients[HookedPlayer].m_RenderPos;
+	else if(HookIndex == 0)
 		HookPos = mix(vec2(Prev.m_HookX, Prev.m_HookY), vec2(Player.m_HookX, Player.m_HookY), Intra);
+	else
+		HookPos = mix(vec2(Prev.m_Hook2X, Prev.m_Hook2Y), vec2(Player.m_Hook2X, Player.m_Hook2Y), Intra);
 
 	float d = distance(Pos, HookPos);
 	vec2 Dir = normalize(Pos - HookPos);
@@ -531,7 +537,8 @@ void CPlayers::RenderHook(
 	Graphics()->QuadsSetRotation(0);
 	Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-	RenderHand(&RenderInfo, Position, normalize(HookPos - Pos), -pi / 2, vec2(20, 0), Alpha);
+	if(HookIndex == 0)
+		RenderHand(&RenderInfo, Position, normalize(HookPos - Pos), -pi / 2, vec2(20, 0), Alpha);
 }
 
 void CPlayers::RenderPlayer(
@@ -982,12 +989,14 @@ void CPlayers::OnRender()
 		{
 			continue;
 		}
-		RenderHook(&GameClient()->m_aClients[ClientId].m_RenderPrev, &GameClient()->m_aClients[ClientId].m_RenderCur, &aRenderInfo[ClientId], ClientId);
+		RenderHook(&GameClient()->m_aClients[ClientId].m_RenderPrev, &GameClient()->m_aClients[ClientId].m_RenderCur, &aRenderInfo[ClientId], ClientId, 0.0f, 0);
+		RenderHook(&GameClient()->m_aClients[ClientId].m_RenderPrev, &GameClient()->m_aClients[ClientId].m_RenderCur, &aRenderInfo[ClientId], ClientId, 0.0f, 1);
 	}
 	if(LocalClientId != -1 && IsPlayerInfoAvailable(LocalClientId))
 	{
 		const CGameClient::CClientData *pLocalClientData = &GameClient()->m_aClients[LocalClientId];
-		RenderHook(&pLocalClientData->m_RenderPrev, &pLocalClientData->m_RenderCur, &aRenderInfo[LocalClientId], LocalClientId);
+		RenderHook(&pLocalClientData->m_RenderPrev, &pLocalClientData->m_RenderCur, &aRenderInfo[LocalClientId], LocalClientId, 0.0f, 0);
+		RenderHook(&pLocalClientData->m_RenderPrev, &pLocalClientData->m_RenderCur, &aRenderInfo[LocalClientId], LocalClientId, 0.0f, 1);
 	}
 
 	// render spectating players

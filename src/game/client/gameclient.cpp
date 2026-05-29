@@ -2580,6 +2580,7 @@ void CGameClient::ApplyPreInputs(int Tick, bool Direct, CGameWorld &GameWorld)
 			Input.m_Jump = PreInput.m_Jump;
 			Input.m_Fire = PreInput.m_Fire;
 			Input.m_Hook = PreInput.m_Hook;
+			Input.m_Hook2 = PreInput.m_Hook2;
 			Input.m_WantedWeapon = PreInput.m_WantedWeapon;
 			Input.m_NextWeapon = PreInput.m_NextWeapon;
 			Input.m_PrevWeapon = PreInput.m_PrevWeapon;

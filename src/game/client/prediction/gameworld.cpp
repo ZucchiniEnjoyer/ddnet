@@ -326,7 +326,7 @@ void CGameWorld::ReleaseHooked(int ClientId)
 	CCharacter *pChr = (CCharacter *)CGameWorld::FindFirst(CGameWorld::ENTTYPE_CHARACTER);
 	for(; pChr; pChr = (CCharacter *)pChr->TypeNext())
 	{
-		if(pChr->Core()->HookedPlayer() == ClientId && !pChr->IsSuper())
+		if((pChr->Core()->HookedPlayer(0) == ClientId || pChr->Core()->HookedPlayer(1) == ClientId) && !pChr->IsSuper())
 		{
 			pChr->ReleaseHook();
 		}
@@ -597,16 +597,18 @@ void CGameWorld::NetObjEnd()
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		if(CCharacter *pChar = GetCharacterById(i))
 			if(!pChar->m_MarkedForDestroy)
-				if(CCharacter *pHookedChar = GetCharacterById(pChar->m_Core.HookedPlayer()))
-					if(pHookedChar->m_MarkedForDestroy)
-					{
-						pHookedChar->m_Pos = pHookedChar->m_Core.m_Pos = pChar->m_Core.m_HookPos;
-						pHookedChar->ResetVelocity();
-						mem_zero(&pHookedChar->m_SavedInput, sizeof(pHookedChar->m_SavedInput));
-						pHookedChar->m_SavedInput.m_TargetY = -1;
-						pHookedChar->m_KeepHooked = true;
-						pHookedChar->m_MarkedForDestroy = false;
-					}
+				for(int HookIndex = 0; HookIndex < CCharacterCore::NUM_HOOKS; HookIndex++)
+					if(CCharacter *pHookedChar = GetCharacterById(pChar->m_Core.HookedPlayer(HookIndex)))
+						if(pHookedChar->m_MarkedForDestroy)
+						{
+							const vec2 HookPos = HookIndex == 0 ? pChar->m_Core.m_HookPos : pChar->m_Core.m_Hook2Pos;
+							pHookedChar->m_Pos = pHookedChar->m_Core.m_Pos = HookPos;
+							pHookedChar->ResetVelocity();
+							mem_zero(&pHookedChar->m_SavedInput, sizeof(pHookedChar->m_SavedInput));
+							pHookedChar->m_SavedInput.m_TargetY = -1;
+							pHookedChar->m_KeepHooked = true;
+							pHookedChar->m_MarkedForDestroy = false;
+						}
 	RemoveEntities();
 
 	// Update character IDs and pointers
