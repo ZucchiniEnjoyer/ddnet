@@ -471,9 +471,9 @@ void CTeeHistorian::RecordPlayerInput(int ClientId, uint32_t UniqueClientId, con
 		if(m_Debug)
 		{
 			const int *pData = (const int *)&DiffInput;
-			dbg_msg("teehistorian", "diff_input cid=%d %d %d %d %d %d %d %d %d %d %d", ClientId,
+			dbg_msg("teehistorian", "diff_input cid=%d %d %d %d %d %d %d %d %d %d %d %d", ClientId,
 				pData[0], pData[1], pData[2], pData[3], pData[4],
-				pData[5], pData[6], pData[7], pData[8], pData[9]);
+				pData[5], pData[6], pData[7], pData[8], pData[9], pData[10]);
 		}
 	}
 	else
