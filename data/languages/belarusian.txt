@@ -178,6 +178,9 @@ High Detail
 Hook
 == Крук
 
+Hook 2
+== Двукрук'е
+
 Invalid Demo
 == Несапраўднае дэма
 

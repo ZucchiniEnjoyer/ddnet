@@ -178,6 +178,9 @@ High Detail
 Hook
 == Крюк
 
+Hook 2
+== Двукрюкье
+
 Invalid Demo
 == Нерабочее демо
 
