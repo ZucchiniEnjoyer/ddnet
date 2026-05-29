@@ -537,8 +537,8 @@ void CPlayers::RenderHook(
 	Graphics()->QuadsSetRotation(0);
 	Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-	if(HookIndex == 0)
-		RenderHand(&RenderInfo, Position, normalize(HookPos - Pos), -pi / 2, vec2(20, 0), Alpha);
+	const vec2 HandPostRotOffset = HookIndex == 0 ? vec2(20.0f, 0.0f) : vec2(20.0f, 0);
+	RenderHand(&RenderInfo, Position, normalize(HookPos - Pos), -pi / 2, HandPostRotOffset, Alpha);
 }
 
 void CPlayers::RenderPlayer(
