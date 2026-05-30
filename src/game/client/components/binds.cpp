@@ -281,7 +281,6 @@ void CBinds::SetDefaults()
 	Bind(KEY_MOUSE_1, "+fire");
 	Bind(KEY_MOUSE_2, "+hook");
 	Bind(KEY_LSHIFT, "+hook2");
-	Bind(KEY_E, "+emote");
 	Bind(KEY_RETURN, "+show_chat; chat all");
 	Bind(KEY_RIGHT, "spectate_next");
 	Bind(KEY_LEFT, "spectate_previous");
@@ -532,6 +531,7 @@ void CBinds::SetDDRaceBinds(bool FreeOnly)
 		Bind(KEY_KP_5, "say /emote blink 999999", FreeOnly);
 		Bind(KEY_MINUS, "spectate_previous", FreeOnly);
 		Bind(KEY_EQUALS, "spectate_next", FreeOnly);
+		Bind(KEY_LSHIFT, "+hook2", FreeOnly);
 	}
 
 	if(g_Config.m_ClDDRaceBindsSet < 2)
@@ -542,8 +542,4 @@ void CBinds::SetDDRaceBinds(bool FreeOnly)
 	}
 
 	g_Config.m_ClDDRaceBindsSet = 2;
-
-	// Second hook (dual hook mod): always use left shift; move emote to E if free
-	Bind(KEY_LSHIFT, "+hook2", false);
-	Bind(KEY_E, "+emote", FreeOnly);
 }
